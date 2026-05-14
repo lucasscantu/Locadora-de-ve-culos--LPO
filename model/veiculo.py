@@ -3,36 +3,22 @@ from enum import Enum
 from .ExcecoesPersonalizadas import PlacaInvalidaError
 from .estados_veiculo import DisponivelState
 
-
 class Categoria(Enum):
     ECONOMICO = "ECONOMICO"
     EXECUTIVO = "EXECUTIVO"
-
-
+    
+    
 class Veiculo(ABC):
     def __init__(self, placa: str, taxa_diaria: float, categoria: Categoria = Categoria.ECONOMICO):
+        self.__placa = ""
+        self.__taxa_diaria = 0.0
+        self._estado_atual = None
         self.placa = placa
         self.categoria = categoria
         self.taxa_diaria = taxa_diaria
         self.estado_atual = DisponivelState(self)
 
-    @property
-    def placa(self):
-        return self.__placa
-
-    @placa.setter
-    def placa(self, placa):
-        if self.valida_placa(placa):
-            self.__placa = placa
-
-    @property
-    def taxa_diaria(self):
-        return self.__taxa_diaria
-
-    @taxa_diaria.setter
-    def taxa_diaria(self, taxa_diaria):
-        self.__taxa_diaria = taxa_diaria
-
+        
     @property
     def estado_atual(self):
         return self._estado_atual
@@ -43,28 +29,40 @@ class Veiculo(ABC):
 
     def tentar_alugar(self):
         self.estado_atual.alugar()
-
+        
     def tentar_devolver(self):
         self.estado_atual.devolver()
-
+        
     def reter_na_frota_pra_conserto(self):
         self.estado_atual.enviar_manutencao()
+        
+    def exibir_dados(self):
+        return f"Placa: {self.placa}\nCategoria: {self.categoria.name}\nTaxa Diária: R$ {self.taxa_diaria:.2f}\nEstado: {self.estado_atual.__class__.__name__.strip().lower().replace('state','')}"
 
-    def exibir_dados(self) -> str:
-        tipo = type(self).__name__
-        estado = type(self.estado_atual).__name__.replace("State", "")
-        return (
-            f"Tipo: {tipo}\n"
-            f"Placa: {self.placa}\n"
-            f"Categoria: {self.categoria.value}\n"
-            f"Taxa Diária: R$ {self.taxa_diaria:.2f}\n"
-            f"Seguro: R$ {self.valor_seguro:.2f}\n"
-            f"Estado: {estado}"
-        )
-
-    def valida_placa(self, placa):
+    @property
+    def placa(self):
+        return self.__placa
+    
+    @placa.setter
+    def placa(self, placa):
+        if(self.valida_placa(placa)):
+            self.__placa = placa
+    
+    @property
+    def taxa_diaria(self):
+        return self.__taxa_diaria
+    
+    @taxa_diaria.setter
+    def taxa_diaria(self, taxa_diaria:float):
+        if taxa_diaria < 0:
+            raise ValueError("A taxa diária do veículo deve ser maior que zero.")
+        elif taxa_diaria is None:
+            raise ValueError("A taxa diária é obrigatória!")
+        self.__taxa_diaria = taxa_diaria
+        
+    def valida_placa(self, placa:str):
         placa = placa.strip().replace("-", "").upper()
-        if len(placa) != 7:
+        if (len(placa) != 7):
             raise PlacaInvalidaError("Placa inválida! Placa deve conter 7 caracteres")
         else:
             if not placa[0:3].isalpha():
@@ -75,17 +73,27 @@ class Veiculo(ABC):
                 elif not placa[4].isalnum():
                     raise PlacaInvalidaError("Placa Inválida!! O 5º caracter deve ser uma letra ou número")
                 else:
-                    print(f"Placa {placa} válida!!")
+                    print(f"Placa {placa} válida!!") 
                     return True
-
-
+                    
+        
 class Carro(Veiculo):
-    def __init__(self, placa: str, taxa_diaria: float, categoria: Categoria = Categoria.ECONOMICO):
+    def __init__(self, placa:str, taxa_diaria:float, categoria:Categoria=Categoria.ECONOMICO):
         super().__init__(placa, taxa_diaria, categoria=categoria)
         self.valor_seguro = 50
-
-
+    
 class Motorhome(Veiculo):
-    def __init__(self, placa: str, taxa_diaria: float, categoria: Categoria = Categoria.ECONOMICO):
+    def __init__(self, placa:str, taxa_diaria:float=0.0, categoria:Categoria=Categoria.ECONOMICO):
         super().__init__(placa, taxa_diaria, categoria=categoria)
         self.valor_seguro = 120
+
+class VeiculoFactory:
+    @staticmethod
+    def criar_veiculo(tipo: str, placa: str, categoria: Categoria, taxa_diaria: float = 0.0):
+        tipo_normalizado = tipo.strip().lower()
+        if tipo_normalizado == "carro":
+            return Carro(placa, taxa_diaria, categoria)
+        elif tipo_normalizado == "motorhome":
+            return Motorhome(placa, taxa_diaria, categoria)
+        else:
+            raise ValueError(f"Tipo de veículo inválido: {tipo}. Use 'carro' ou 'motorhome'.")
