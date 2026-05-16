@@ -40,6 +40,13 @@ class JanelaCadastroLocacao(tk.Toplevel):
         self.focus_force()
         self.after(100, self.txt_data_inicio.focus_set)
 
+        # Vincula eventos para recalcular valor automaticamente
+        self.txt_data_inicio.bind("<FocusOut>", lambda e: self._calcular_valor_automatico())
+        self.txt_data_inicio.bind("<KeyRelease>", lambda e: self._calcular_valor_automatico())
+        self.txt_data_fim.bind("<FocusOut>", lambda e: self._calcular_valor_automatico())
+        self.txt_data_fim.bind("<KeyRelease>", lambda e: self._calcular_valor_automatico())
+        self.cb_veiculo.bind("<<ComboboxSelected>>", lambda e: self._calcular_valor_automatico())
+
     # ------------------------------------------------------------------
     # Widgets
     # ------------------------------------------------------------------
@@ -83,6 +90,10 @@ class JanelaCadastroLocacao(tk.Toplevel):
         self.txt_valor = tk.Entry(frm, width=37)
         self.txt_valor.grid(row=4, column=1, sticky="ew", pady=5)
 
+        # Label de feedback do cálculo automático
+        self.lbl_calculo = tk.Label(frm, text="", fg="#006600", font=("Helvetica", 9))
+        self.lbl_calculo.grid(row=5, column=1, sticky="w")
+
         frm.columnconfigure(1, weight=1)
 
         # Aviso para o admin
@@ -101,6 +112,52 @@ class JanelaCadastroLocacao(tk.Toplevel):
     # ------------------------------------------------------------------
     # Lógica
     # ------------------------------------------------------------------
+    def _calcular_valor_automatico(self):
+        """Calcula o valor total automaticamente com base na taxa diária e nas datas."""
+        from datetime import datetime
+        from model.LocacaoStrategy import CalculoPadraoStrategy
+
+        placa = self._placa_selecionada()
+        data_inicio_str = self.txt_data_inicio.get().strip()
+        data_fim_str = self.txt_data_fim.get().strip()
+
+        if not placa or not data_inicio_str or not data_fim_str:
+            self.lbl_calculo.config(text="")
+            return
+
+        try:
+            data_inicio = datetime.strptime(data_inicio_str, "%Y-%m-%d").date()
+            data_fim = datetime.strptime(data_fim_str, "%Y-%m-%d").date()
+        except ValueError:
+            self.lbl_calculo.config(text="")
+            return
+
+        if data_inicio > data_fim:
+            self.lbl_calculo.config(text="⚠ Data início > data fim", fg="#cc0000")
+            return
+
+        dias = (data_fim - data_inicio).days
+        if dias <= 0:
+            dias = 1
+
+        # Busca o veículo pelo placa para obter a taxa diária
+        veiculos = self.controller.veiculo_dao.listar_todos()
+        veiculo = next((v for v in veiculos if v.placa == placa), None)
+        if veiculo is None:
+            self.lbl_calculo.config(text="")
+            return
+
+        estrategia = CalculoPadraoStrategy()
+        valor = estrategia.calcular_diarias(veiculo, dias)
+
+        # Preenche o campo de valor automaticamente
+        self.txt_valor.delete(0, tk.END)
+        self.txt_valor.insert(0, f"{valor:.2f}")
+        self.lbl_calculo.config(
+            text=f"✔ {dias} dia(s) × R$ {veiculo.taxa_diaria:.2f} + seguro = R$ {valor:.2f}",
+            fg="#006600"
+        )
+
     def _atualizar_lista_veiculos(self):
         """Carrega TODOS os veículos no combobox (admin tem acesso irrestrito)."""
         veiculos = self.controller.veiculo_dao.listar_todos()

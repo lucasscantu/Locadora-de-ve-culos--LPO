@@ -24,7 +24,7 @@ class JanelaNovaReserva(tk.Toplevel):
     def __init__(self, master=None):
         super().__init__(master)
         self.title("Nova Reserva")
-        self.geometry("520x420")
+        self.geometry("520x480")
 
         self.controller = LocacaoController()
         self.veiculos_disponiveis = []  # cache da última busca
@@ -81,7 +81,12 @@ class JanelaNovaReserva(tk.Toplevel):
         tk.Label(frm_veic, text="Veículo disponível:").grid(row=0, column=0, sticky="w", pady=5)
         self.cb_veiculo = ttk.Combobox(frm_veic, state="readonly", width=40)
         self.cb_veiculo.grid(row=0, column=1, sticky="ew", pady=5)
+        self.cb_veiculo.bind("<<ComboboxSelected>>", lambda e: self._atualizar_valor_estimado())
         frm_veic.columnconfigure(1, weight=1)
+
+        # Label de valor estimado
+        self.lbl_valor_estimado = tk.Label(self, text="", fg="#006600", font=("Helvetica", 10, "bold"))
+        self.lbl_valor_estimado.pack(pady=2)
 
         # Aviso
         tk.Label(self,
@@ -100,6 +105,44 @@ class JanelaNovaReserva(tk.Toplevel):
     # ------------------------------------------------------------------
     # Lógica
     # ------------------------------------------------------------------
+    def _atualizar_valor_estimado(self):
+        """Exibe o valor estimado da locação ao selecionar um veículo."""
+        from datetime import datetime
+        from model.LocacaoStrategy import CalculoPadraoStrategy
+
+        texto = self.cb_veiculo.get().strip()
+        if not texto:
+            self.lbl_valor_estimado.config(text="")
+            return
+
+        placa = texto.split(" ")[0]
+        veiculo = next((v for v in self.veiculos_disponiveis if v.placa == placa), None)
+        if veiculo is None:
+            self.lbl_valor_estimado.config(text="")
+            return
+
+        data_inicio_str = self.txt_data_inicio.get().strip()
+        data_fim_str = self.txt_data_fim.get().strip()
+
+        try:
+            data_inicio = datetime.strptime(data_inicio_str, "%Y-%m-%d").date()
+            data_fim = datetime.strptime(data_fim_str, "%Y-%m-%d").date()
+        except ValueError:
+            self.lbl_valor_estimado.config(text="")
+            return
+
+        dias = (data_fim - data_inicio).days
+        if dias <= 0:
+            dias = 1
+
+        estrategia = CalculoPadraoStrategy()
+        valor = estrategia.calcular_diarias(veiculo, dias)
+
+        self.lbl_valor_estimado.config(
+            text=f"💰 Estimativa: {dias} dia(s) × R$ {veiculo.taxa_diaria:.2f} + seguro = R$ {valor:.2f}",
+            fg="#006600"
+        )
+
     def _buscar_disponiveis(self):
         data_inicio = self.txt_data_inicio.get().strip()
         data_fim = self.txt_data_fim.get().strip()
@@ -132,6 +175,8 @@ class JanelaNovaReserva(tk.Toplevel):
         ]
         self.cb_veiculo['values'] = valores
         self.cb_veiculo.current(0)
+        self.update_idletasks()  # garante que o combobox registrou o valor antes do cálculo
+        self._atualizar_valor_estimado()
 
     def _confirmar(self):
         texto = self.cb_veiculo.get().strip()
